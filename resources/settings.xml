@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <setting id="preferredQuality" type="select" values="1080|720" label="Video Quality"/>
+</settings>
