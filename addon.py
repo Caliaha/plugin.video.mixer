@@ -3,6 +3,7 @@ import urllib
 import urllib2
 import urlparse
 import re
+import xbmcaddon
 import xbmcplugin
 import xbmcgui
 import json
@@ -11,7 +12,10 @@ base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
 args = urlparse.parse_qs(sys.argv[2][1:])
 
-playbackQuality = '1080' # Make into proper setting
+addon = xbmcaddon.Addon()
+
+
+playbackQuality = addon.getSetting('preferredQuality')
 
 def debug(list):
 	xbmcgui.Dialog().ok("Mixer", "\n".join(list))
@@ -19,11 +23,6 @@ def debug(list):
 def CATEGORIES():
 	addDir('Top Streams','', 'topstreams','')
 	addDir('Browse Games', '', 'games', '')
-	#liz=xbmcgui.ListItem("Top Streams", iconImage="DefaultFolder.png", thumbnailImage="DefaultFolder.png")
-	#liz.setInfo( type="Video", infoLabels={ "Title": "Top Streams" } )
-	#xbmcplugin.addDirectoryItem(handle=addon_handle,url='plugin://plugin.video.mixertest/topstreams',listitem=liz,isFolder=True)
-	#addDir('Case Closed','http://pluto.lan/cgi-bin/cgi.pl?name=case-closed',1,'')
-	#addDir('Fairy Tail','http://pluto.lan/cgi-bin/cgi.pl?name=fairy-tail',1,'')
                        
 def INDEX(url):
         req = urllib2.Request(url)
@@ -45,14 +44,20 @@ def TOPSTREAMS(url):
 	for streamer in data:
 		addStreamer(streamer)
 
-def addStreamer(streamer): #name, broadcastID, mode, iconimage, title, game, description
-	u=base_url+"?broadcastID="+urllib.quote_plus(str(streamer["id"]))+"&mode=playStream&name="+urllib.quote_plus(streamer["token"])+"&thumbnail="+urllib.quote_plus(streamer["type"]["coverUrl"])
+def addStreamer(streamer):
+	#debug([str(streamer["id"]), str(streamer["token"]), streamer["type"]["coverUrl"]])
+	
 	#u=url
 	name = streamer["token"]
+	id = str(streamer["id"]) or ""
 	title = streamer["name"] or ""
 	game = streamer["type"]["name"] or ""
+	thumbnail = streamer["type"]["coverUrl"] or ""
 	description = streamer["type"]["description"] or ""
 	currentViewers = str(streamer["viewersCurrent"]) or ""
+	
+	u=base_url+"?broadcastID="+urllib.quote_plus(id)+"&mode=playStream&name="+urllib.quote_plus(name)+"&thumbnail="+urllib.quote_plus(thumbnail)
+	
 	liz=xbmcgui.ListItem(name + ' - ' + title, iconImage="DefaultVideo.png", thumbnailImage=streamer["type"]["coverUrl"])
 	if "bannerUrl" in streamer:
 		liz.setArt({'fanart': streamer["bannerUrl"]})
@@ -92,7 +97,9 @@ def searchGames(url, query, start):
 	count = 0
 	for game in data:
 		count = count + 1
-		u=base_url+"?gameID="+urllib.quote_plus(str(game["id"]))+"&mode=game&thumbnail="+urllib.quote_plus(game["coverUrl"])
+		gameID = str(game["id"]) or "" # Probably should just skip if this happens
+		thumbnail = game["coverUrl"] or ""
+		u=base_url+"?gameID="+urllib.quote_plus(gameID)+"&mode=game&thumbnail="+urllib.quote_plus(thumbnail)
 		title = game["name"] or ""
 		currentViewers = str(game["viewersCurrent"]) or ""
 		liz=xbmcgui.ListItem(title, iconImage="DefaultVideo.png", thumbnailImage=game["coverUrl"])
@@ -194,7 +201,7 @@ if not mode:
 	CATEGORIES()
 
 if mode:
-	if mode[0] == "topstreams": # Reduce to just /topstreams
+	if mode[0] == "topstreams":
 		page = args.get('page', [0])
 		paginate("https://mixer.com/api/v1/delve/topStreams", page[0])
 	if mode[0] == "game":
