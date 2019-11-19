@@ -10,6 +10,7 @@ import json
 import pickle
 
 addon = xbmcaddon.Addon()
+addonName = addon.getAddonInfo('name')
 
 base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
@@ -24,7 +25,72 @@ if playbackQuality == 0:
 	playbackQuality = 1080
 	addon.setSetting('preferredQuality', '1080')
 
-
+class streamer:
+	def __init__(self, jsonString):
+		data = json.loads(jsonString)
+		try:
+			self.name = data['token']
+		except:
+			self.name = ""
+		try:
+			self.id = str(data['id'])
+		except:
+			self.id = ""
+		try:
+			self.isOnline = data['online']
+		except:
+			self.isOnline = False
+		try:
+			self.title = data['name']
+		except:
+			self.title = ''
+		try:
+			self.game = data['type']['name']
+		except:
+			self.game = ''
+		try:
+			self.gameID = data['type']['id']
+		except:
+			self.gameID = None
+		try:
+			self.thumbnail = data['thumbnail']['url']
+		except:
+			self.thumbnail = ''
+		try:
+			self.gameCover = data['type']['coverUrl']
+		except:
+			self.gameCover = ''
+		try:
+			self.description = data['type']['description']
+		except:
+			self.description = ''
+		try:
+			self.currentViewers = str(data["viewersCurrent"])
+		except:
+			self.currentViewers = ''
+		try:
+			self.bannerUrl = data["bannerUrl"]
+		except:
+			self.bannerUrl = False
+		try:
+			self.backgroundUrl = data["type"]["backgroundUrl"]
+		except:
+			self.backgroundUrl = ''
+		try:
+			self.partnered = data['partnered']
+		except:
+			self.partnered = False
+		try:
+			self.audience = data['audience']
+		except:
+			self.audience = 'N/A'
+		if self.description is None:
+			self.description = ''
+		if self.thumbnail is '':
+			self.thumbnail = self.gameCover
+	def infoLabel(self):
+		return {"Title": u'{} - {}'.format(self.name, self.title), "Plot": u'Viewers: {}\nAudience: {}\n{}\n{}'.format(self.currentViewers, self.audience, self.game, self.description)}
+		
 
 def debug(list):
 	if type(list) == 'list':
@@ -32,6 +98,17 @@ def debug(list):
 	else:
 		string = str(list)
 	xbmcgui.Dialog().ok("Mixer", string)
+
+def build_url(query):
+	return base_url + '?' + urllib.urlencode(query)
+
+def fetchURL(url):
+	req = urllib2.Request(url)
+	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
+	res = urllib2.urlopen(req)
+	data = res.read()
+	res.close()
+	return data
 
 def getUserInput(title, hidden=False):
 	kb = xbmc.Keyboard('default', 'heading')
@@ -45,6 +122,7 @@ def getUserInput(title, hidden=False):
 
 def CATEGORIES():
 	addDir('Top Streams','', 'topstreams','')
+	addDir('Following', '', 'following', '')
 	addDir('Browse Games', '', 'games', '')
 	addDir('Search', '', 'search', '')
 
@@ -54,14 +132,28 @@ def SEARCH():
 	addDir('Search Channel All', '', 'search', '', { 'category': 'channels', 'scope': 'all' })
 
 def TOPSTREAMS(url):
-	req = urllib2.Request(url)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	link = fetchURL(url)
 	data = json.loads(link)
-	for streamer in data:
-		addStreamer(streamer)
+	for stream in data:
+		addStreamer(streamer(json.dumps(stream)))
+
+def loadFollows():
+	try:
+		file = open(PROFILE + 'following.txt', 'rb')
+		following = pickle.load(file)
+		file.close()
+	except:
+		following = [ ]
+
+	return following
+
+def saveFollows(following):
+	try:
+		file = open(PROFILE + 'following.txt', 'wb')
+		pickle.dump(following, file)
+		file.close()
+	except:
+		pass
 
 def getSearchHistory(category):
 	try:
@@ -96,31 +188,23 @@ def doSearch(category, scope=""):
 		xbmcplugin.addDirectoryItem(handle=addon_handle, url=base_url + '?mode=search&category=' + category + '&page=0&query=' + item + '&scope=' + scope,listitem=liz,isFolder=True)
 
 def addStreamer(streamer):
-	name = streamer["token"]
-	id = str(streamer["id"]) or ""
-	title = streamer["name"] or ""
-	try:
-		game = streamer["type"]["name"] or ""
-	except:
-		game = ""
-	try:
-		thumbnail = streamer["type"]["coverUrl"] or ""
-	except:
-		thumbnail = ""
-	try:
-		description = streamer["type"]["description"] or ""
-	except:
-		description = ""
-	currentViewers = str(streamer["viewersCurrent"]) or ""
+	u = build_url({'broadcastID': streamer.id, 'mode': 'playStream', 'name': streamer.name, 'thumbnail': streamer.thumbnail})
 	
-	u=base_url+"?broadcastID="+urllib.quote_plus(id)+"&mode=playStream&name="+urllib.quote_plus(name)+"&thumbnail="+urllib.quote_plus(thumbnail)
-	
-	liz=xbmcgui.ListItem(name + ' - ' + title, iconImage="DefaultVideo.png", thumbnailImage=thumbnail)
-	if "bannerUrl" in streamer:
-		liz.setArt({'fanart': streamer["bannerUrl"]})
+	liz=xbmcgui.ListItem(u'{} - {}'.format(streamer.name, streamer.title), iconImage="DefaultVideo.png", thumbnailImage=streamer.thumbnail)
+	liz.setArt({'fanart': streamer.backgroundUrl})
+	liz.setInfo( type="Video", infoLabels=streamer.infoLabel() )
+	following = loadFollows()
+
+	if streamer.id in following:
+		liz.addContextMenuItems([
+			('Unfollow', 'RunPlugin({})'.format(build_url({'mode': 'removeFollower', 'id': streamer.id, 'name': streamer.name}))),
+			('View Game', 'Container.Update(%s)'%build_url({'mode': 'game', 'gameID': streamer.gameID})),
+		])
 	else:
-		liz.setArt({'fanart': streamer["type"]["backgroundUrl"]})
-	liz.setInfo( type="Video", infoLabels={ "Title": name + ' - ' + title, "Plot": 'Viewers: ' + currentViewers + '\n' + game + '\n' + description } )
+		liz.addContextMenuItems([
+			('Follow', 'RunPlugin({})'.format(build_url({'mode': 'addFollower', 'id': streamer.id, 'name': streamer.name}))),
+			('View Game', 'Container.Update(%s)'%build_url({'mode': 'game', 'gameID': streamer.gameID})),
+		])
 	return xbmcplugin.addDirectoryItem(handle=addon_handle, url=u, listitem=liz)
 
 
@@ -144,21 +228,35 @@ def paginate(url, start):
 	#liz.setInfo( type="Video", infoLabels={ "Title": name } )
 	xbmcplugin.addDirectoryItem(handle=addon_handle, url=base_url + '?mode=topstreams&page=' + str(int(start) + 1),listitem=liz,isFolder=True)
 
+def doFollowing(start=0):
+	following = loadFollows()
+	limit = int(addon.getSetting('followingLimit') or 16)
+	total = len(following)
+	xbmcplugin.setContent(addon_handle, 'videos')
+
+	for i in range(start, limit+start >= total and total or limit+start):
+		follow = following[i]
+		url = 'https://mixer.com/api/v1/channels/{}/details'.format(follow)
+		link = fetchURL(url)
+		stream = streamer(link)
+		if stream.isOnline:
+			addStreamer(stream)
+	#if count >= limit:
+	if limit + start < total:
+		liz=xbmcgui.ListItem("Next Page", iconImage="DefaultFolder.png")
+		xbmcplugin.addDirectoryItem(handle=addon_handle, url=build_url({'mode': 'following', 'page': start+limit}),listitem=liz,isFolder=True)
+
 def searchChannels(query, start, scope):
 	limit = 32
 	#https://mixer.com/api/v1/channels?where=suspended:eq:0,languageId:ne:en&limit=32&page=0&order=partnered:desc,featureLevel:desc,online:desc,viewersCurrent:desc,viewersTotal:desc&noCount=1&scope=names&q=mario
 	url = 'https://mixer.com/api/v1/channels?where=suspended:eq:0,online:eq:1&limit=' + str(limit) + '&page=' + str(start) + '&order=online:desc,viewersCurrent:desc,partnered:desc,featureLevel:desc,viewersTotal:desc&noCount=1&scope=' + scope + '&q=' + urllib.quote_plus(query)
 	xbmcplugin.setContent(addon_handle, 'videos')
-	req = urllib2.Request(url)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	link = fetchURL(url)
 	data = json.loads(link)
 	count = 0
-	for streamer in data:
+	for stream in data:
 		count = count + 1
-		addStreamer(streamer)
+		addStreamer(streamer(stream))
 	
 	if count >= limit:
 		liz=xbmcgui.ListItem("Next Page", iconImage="DefaultFolder.png")
@@ -168,11 +266,7 @@ def searchGames(url, query, start):
 	limit = 32
 	urlP = url + "&limit=" + str(limit) + "&page=" + str(start) + "&query=" + urllib.quote_plus(query)
 	xbmcplugin.setContent(addon_handle, 'videos')
-	req = urllib2.Request(urlP)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	link = fetchURL(urlP)
 	data = json.loads(link)
 	count = 0
 	for game in data:
@@ -208,16 +302,13 @@ def listGame(gameID, start):
 	limit = 52 # Make a setting later FIXME
 	#https://mixer.com/api/v1/channels?where=typeId:eq:568925&limit=52&page=0&order=online:desc,viewersCurrent:desc&noCount=1
 	urlP = 'https://mixer.com/api/v1/channels?where=typeId:eq:' + gameID + "&limit=" + str(limit) + "&page=" + str(start) + '&order=online:desc,viewersCurrent:desc&noCount=1'
-	xbmcplugin.setContent(addon_handle, 'videos')
-	req = urllib2.Request(urlP)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	#xbmcplugin.setContent(addon_handle, 'videos')
+	link = fetchURL(urlP)
+
 	data = json.loads(link)
 	count = 0
-	for streamer in data:
-		addStreamer(streamer)
+	for stream in data:
+		addStreamer(streamer(json.dumps(stream)))
 		count = count + 1
 	
 	#liz.setInfo( type="Video", infoLabels={ "Title": name } )
@@ -229,11 +320,7 @@ def listGame(gameID, start):
 
 def streamerInfo(broadcastID, thumbnail, video):
 	url = 'https://mixer.com/api/v1/channels/' + str(broadcastID) + '/details'
-	req = urllib2.Request(url)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	link = fetchURL(url)
 	data = json.loads(link)
 	li = xbmcgui.ListItem(path=video, thumbnailImage=thumbnail)
 	name = data['name'] or ""
@@ -259,11 +346,7 @@ def selectPreferredOrLowerQuality(qualities):
 
 def fetchManifest(broadcastID, thumbnail):
 	url = 'https://mixer.com/api/v1/channels/' + str(broadcastID) + '/manifest.m3u8'
-	req = urllib2.Request(url)
-	req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0')
-	response = urllib2.urlopen(req)
-	link=response.read()
-	response.close()
+	link = fetchURL(url)
 	#https://videocdn.mixer.com/hls/90571077-73518d48d203e1564251a530245f253e_720p/index.m3u8
 	#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=4000000,RESOLUTION=1920x1080,NAME=source(1080p)
 	#https://videocdn.mixer.com/hls/90571077-73518d48d203e1564251a530245f253e_source/index.m3u8
@@ -295,6 +378,30 @@ if not mode:
 	CATEGORIES()
 
 if mode:
+	if mode[0] == "addFollower":
+		id = args.get('id')
+		name = args.get('name')
+		if id:
+			following = loadFollows()
+			if str(id[0]) not in following:
+				following.append(str(id[0]))
+			saveFollows(following)
+			xbmc.executebuiltin("Notification(%s, %s)"%(addonName, 'Followed {}'.format(name[0])))
+	if mode[0] == "removeFollower":
+		id = args.get('id')
+		name = args.get('name')
+		if id:
+			following = loadFollows()
+			try:
+				following.remove(str(id[0]))
+			except:
+				pass
+			saveFollows(following)
+			xbmc.executebuiltin("Container.Refresh")
+			xbmc.executebuiltin("Notification(%s, %s)"%(addonName, 'Unfollowed {}'.format(name[0])))
+	if mode[0] == "following":
+		page = args.get('page', [0])
+		doFollowing(int(page[0]))
 	if mode[0] == "topstreams":
 		page = args.get('page', [0])
 		paginate("https://mixer.com/api/v1/delve/topStreams", page[0])

@@ -2,4 +2,5 @@
 <settings>
     <setting id="preferredQuality" type="select" values="1080|720|480|320|160" label="Video Quality"/>
 	<setting id="searchHistoryAmount" type="slider" default="24" range="0,1,50" option="int" label="Search History Amount"/>
+	<setting id="followingLimit" type="slider" default="16" range="1,1,50" option="int" label="Streamers Per Page (Following)"/>
 </settings>
