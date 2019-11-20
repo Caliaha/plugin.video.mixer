@@ -28,66 +28,26 @@ if playbackQuality == 0:
 class streamer:
     def __init__(self, jsonString):
         data = json.loads(jsonString)
-        try:
-            self.name = data['token']
-        except:
-            self.name = ""
-        try:
-            self.id = str(data['id'])
-        except:
-            self.id = ""
-        try:
-            self.isOnline = data['online']
-        except:
-            self.isOnline = False
-        try:
-            self.title = data['name']
-        except:
-            self.title = ''
-        try:
-            self.game = data['type']['name']
-        except:
-            self.game = ''
-        try:
-            self.gameID = data['type']['id']
-        except:
-            self.gameID = None
-        try:
-            self.thumbnail = data['thumbnail']['url']
-        except:
-            self.thumbnail = ''
-        try:
-            self.gameCover = data['type']['coverUrl']
-        except:
-            self.gameCover = ''
-        try:
-            self.description = data['type']['description']
-        except:
-            self.description = ''
-        try:
-            self.currentViewers = str(data["viewersCurrent"])
-        except:
-            self.currentViewers = ''
-        try:
-            self.bannerUrl = data["bannerUrl"]
-        except:
-            self.bannerUrl = False
-        try:
-            self.backgroundUrl = data["type"]["backgroundUrl"]
-        except:
-            self.backgroundUrl = ''
-        try:
-            self.partnered = data['partnered']
-        except:
-            self.partnered = False
-        try:
-            self.audience = data['audience']
-        except:
-            self.audience = 'N/A'
+        self.name = data.get("token", "")
+        self.title = data.get("name", "")
+        self.bannerUrl = data.get("bannerUrl", False)
+        self.audience = data.get("audience", "N/A")
+        self.id = str(data.get("id", ""))
+        self.currentViewers = str(data.get("viewersCurrent", ""))
+        self.isOnline = bool(data.get("online", 0))
+        self.partnered = bool(data.get("partnered", 0))
+        game = data.get("type", {})
+        self.game = game.get("name", "")
+        self.gameID = game.get("id", None)
+        self.gameCover = game.get("coverUrl", "")
+        self.backgroundUrl = game.get("backgroundUrl", "")
+        self.description = game.get("description", "")
         if self.description is None:
             self.description = ''
+        self.thumbnail = data.get("thumbnail", {}).get("url", "")
         if self.thumbnail is '':
             self.thumbnail = self.gameCover
+
     def infoLabel(self):
         return {"Title": u'{} - {}'.format(self.name, self.title), "Plot": u'Viewers: {}\nAudience: {}\n{}\n{}'.format(self.currentViewers, self.audience, self.game, self.description)}
 
